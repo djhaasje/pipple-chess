@@ -35,6 +35,46 @@
   header .brand{font-size:22px;font-weight:900;letter-spacing:.06em}
   header .brand span{color:#D9B8EC}
   header .tag{font-size:13px;color:#D9C6E6}
+  header #version{background:rgba(255,255,255,.14);border-radius:10px;padding:2px 8px;
+    font-size:11.5px;color:#EADCF4}
+  header .user{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:13px}
+  header .user b{color:#fff}
+  header .user button{background:rgba(255,255,255,.14);color:#fff;border:0;border-radius:14px;
+    padding:5px 12px;font:inherit;font-size:12px;cursor:pointer}
+  header .user button:hover{background:rgba(255,255,255,.26)}
+
+  /* ---------------- login ---------------- */
+  #login{
+    position:fixed;inset:0;background:var(--purple);display:none;
+    align-items:center;justify-content:center;z-index:20;padding:20px;
+  }
+  #login.on{display:flex}
+  #login .box{background:#fff;border-radius:10px;padding:30px 32px;max-width:380px;width:100%;
+    box-shadow:0 18px 50px rgba(0,0,0,.35)}
+  #login h3{margin:0 0 6px;font-size:20px;color:var(--purple)}
+  #login .ver{margin-top:14px;font-size:11.5px;color:#9A8FA6;text-align:center}
+  #login p{margin:0 0 18px;font-size:13px;color:#6B5B76;line-height:1.5}
+  #login input{width:100%;box-sizing:border-box;border:1px solid var(--lilac2);border-radius:4px;
+    padding:11px 12px;font:inherit;font-size:15px;color:var(--ink);margin-bottom:14px}
+  #login input:focus{outline:2px solid var(--magenta);outline-offset:-1px}
+  #login button{width:100%;padding:11px}
+  #login .known{margin-top:16px;font-size:12px;color:#6B5B76}
+  #login .known span{display:inline-block;background:var(--lilac);color:var(--purple);
+    border-radius:12px;padding:4px 10px;margin:4px 4px 0 0;cursor:pointer;font-weight:600}
+  #login .known span:hover{background:var(--lilac2)}
+
+  /* ---------------- scores ---------------- */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+  .stat{background:var(--lilac);border-radius:6px;padding:8px 4px;text-align:center}
+  .stat b{display:block;font-size:18px;color:var(--purple);line-height:1.2}
+  .stat span{font-size:10.5px;color:#6B5B76;text-transform:uppercase;letter-spacing:.04em}
+  .statline{font-size:12.5px;color:#6B5B76;margin-bottom:4px}
+  .statline b{color:var(--purple)}
+  .rank{margin-top:12px;border-top:1px solid var(--lilac2);padding-top:10px}
+  .rank .r{display:flex;gap:8px;font-size:12.5px;padding:3px 0}
+  .rank .r.me{font-weight:700;color:var(--purple)}
+  .rank .r i{font-style:normal;color:#9A8FA6;width:16px}
+  .rank .r em{font-style:normal;margin-left:auto;color:#6B5B76}
   main{
     flex:1 1 auto;display:flex;gap:28px;justify-content:center;
     align-items:flex-start;padding:22px;flex-wrap:wrap;
@@ -222,7 +262,21 @@
 <header>
   <div class="brand">pipple<span> chess</span></div>
   <div class="tag">paars tegen wit</div>
+  <div class="tag" id="version">v1.2.0</div>
+  <div class="user">Speler: <b id="playerName">—</b>
+    <button id="btnSwitch" type="button">Wissel speler</button></div>
 </header>
+
+<div id="login"><div class="box">
+  <h3>Welkom bij Pipple Chess</h3>
+  <p>Vul je naam in. Je resultaten tegen de computer worden op dit apparaat bewaard.</p>
+  <form id="loginForm" autocomplete="off">
+    <input id="loginName" maxlength="24" placeholder="Je naam" required>
+    <button type="submit">Start met spelen</button>
+  </form>
+  <div class="known" id="knownPlayers"></div>
+  <div class="ver">versie 1.2.0</div>
+</div></div>
 
 <main>
   <div class="board-wrap">
@@ -284,6 +338,19 @@
     </div>
 
     <div class="card">
+      <h2>Scores</h2>
+      <div class="stats">
+        <div class="stat"><b id="stGames">0</b><span>partijen</span></div>
+        <div class="stat"><b id="stWins">0</b><span>winst</span></div>
+        <div class="stat"><b id="stDraws">0</b><span>remise</span></div>
+        <div class="stat"><b id="stLoss">0</b><span>verlies</span></div>
+      </div>
+      <div class="statline" id="stPct"></div>
+      <div class="statline" id="stStreak"></div>
+      <div class="rank" id="rankList"></div>
+    </div>
+
+    <div class="card">
       <h2>Robin &mdash; je schaakcoach</h2>
       <div class="robin-head">
         <img src="Robin.jpg" alt="Robin">
@@ -309,7 +376,8 @@
   </div>
 </main>
 
-<footer>Klik een stuk aan om de legale zetten te zien &middot; rokade, en-passant en promotie worden ondersteund</footer>
+<footer>Klik een stuk aan om de legale zetten te zien &middot; rokade, en-passant en promotie worden ondersteund
+  &middot; <span id="footVersion">Pipple Chess v1.2.0</span></footer>
 
 <div id="overlay"><div id="promo">
   <h3>Kies een stuk voor promotie</h3>
@@ -894,6 +962,7 @@ if (typeof document !== 'undefined') (function () {
     hint = null;
     flipped = (sideSel.value === 'b');
     lastWarned = '';
+    recorded = false;
     chatEl.innerHTML = '';
     robinSay('Nieuwe partij! Ik ben Robin. Vraag me gerust om een <b>hint</b>, ' +
       'of stel een vraag over de stelling of de regels.');
@@ -957,20 +1026,29 @@ if (typeof document !== 'undefined') (function () {
     btnHint.disabled = over || thinking || !humanTurn();
   }
 
+  /* Legt de uitslag eenmalig vast zodra de partij is afgelopen. */
+  function finish(res) {
+    if (recorded) return;
+    recorded = true;
+    recordResult(res);
+  }
+
   function renderStatus() {
     const st = E.gameStatus(state, legal);
     if (st === 'checkmate') {
       whoEl.textContent = 'Schaakmat \u2014 ' + NAME[state.turn === 'w' ? 'b' : 'w'] + ' wint!';
       noteEl.textContent = NAME[state.turn] + ' staat schaak en heeft geen zet meer.';
-      over = true; return;
+      over = true;
+      finish(state.turn === sideSel.value ? 'loss' : 'win');
+      return;
     }
     if (st === 'stalemate') {
       whoEl.textContent = 'Pat \u2014 remise';
       noteEl.textContent = NAME[state.turn] + ' kan niet zetten maar staat niet schaak.';
-      over = true; return;
+      over = true; finish('draw'); return;
     }
-    if (st === 'fifty') { whoEl.textContent = 'Remise'; noteEl.textContent = '50-zettenregel.'; over = true; return; }
-    if (st === 'material') { whoEl.textContent = 'Remise'; noteEl.textContent = 'Onvoldoende materiaal.'; over = true; return; }
+    if (st === 'fifty') { whoEl.textContent = 'Remise'; noteEl.textContent = '50-zettenregel.'; over = true; finish('draw'); return; }
+    if (st === 'material') { whoEl.textContent = 'Remise'; noteEl.textContent = 'Onvoldoende materiaal.'; over = true; finish('draw'); return; }
     over = false;
     whoEl.textContent = NAME[state.turn] + ' is aan zet';
     if (thinking) noteEl.textContent = 'De computer denkt na\u2026';
@@ -1093,6 +1171,112 @@ if (typeof document !== 'undefined') (function () {
      Robin: schaakcoach in de chat. Gebruikt dezelfde engine als de
      computer, maar rekent altijd neutraal (zonder speelstijl-bias).
      ===================================================================== */
+
+  /* =====================================================================
+     Spelers en scores. Alles wordt lokaal bewaard in localStorage,
+     zodat meerdere mensen op hetzelfde apparaat hun eigen score houden.
+     ===================================================================== */
+  const APP_VERSION = '1.2.0';
+  const STORE_KEY = 'pipplechess.v1';
+  const loginEl = document.getElementById('login');
+  const loginForm = document.getElementById('loginForm');
+  const loginName = document.getElementById('loginName');
+  const knownEl = document.getElementById('knownPlayers');
+  const playerNameEl = document.getElementById('playerName');
+  let db = { current: '', players: {} };
+  let recorded = false;
+
+  function loadDB() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) db = JSON.parse(raw);
+    } catch (e) { /* geen of corrupte opslag: begin opnieuw */ }
+    if (!db.players) db.players = {};
+  }
+
+  function saveDB() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(db)); } catch (e) { /* privé-modus */ }
+  }
+
+  function player() {
+    if (!db.current) return { w: 0, d: 0, l: 0, streak: 0, best: 0 };
+    if (!db.players[db.current]) {
+      db.players[db.current] = { w: 0, d: 0, l: 0, streak: 0, best: 0 };
+    }
+    return db.players[db.current];
+  }
+
+  function recordResult(res) {
+    const p = player();
+    if (res === 'win') { p.w++; p.streak++; if (p.streak > p.best) p.best = p.streak; }
+    else if (res === 'loss') { p.l++; p.streak = 0; }
+    else { p.d++; p.streak = 0; }
+    saveDB();
+    renderScores();
+  }
+
+  function renderScores() {
+    const p = player(), g = p.w + p.d + p.l;
+    document.getElementById('stGames').textContent = g;
+    document.getElementById('stWins').textContent = p.w;
+    document.getElementById('stDraws').textContent = p.d;
+    document.getElementById('stLoss').textContent = p.l;
+    document.getElementById('stPct').innerHTML = g
+      ? 'Winstpercentage: <b>' + Math.round((p.w + p.d / 2) / g * 100) + '%</b>'
+      : 'Nog geen partij gespeeld tegen de computer.';
+    document.getElementById('stStreak').innerHTML =
+      'Reeks: <b>' + p.streak + '</b> op rij' + (p.best ? ' &middot; beste reeks: <b>' + p.best + '</b>' : '');
+
+    const names = Object.keys(db.players)
+      .filter(function (n) { const q = db.players[n]; return n && q.w + q.d + q.l > 0; })
+      .sort(function (a, b) {
+        const x = db.players[a], y = db.players[b];
+        return (y.w - y.l) - (x.w - x.l) || y.w - x.w;
+      });
+    const rank = document.getElementById('rankList');
+    if (names.length < 2) { rank.innerHTML = ''; return; }
+    rank.innerHTML = '<div class="statline"><b>Ranglijst op dit apparaat</b></div>' +
+      names.slice(0, 5).map(function (n, i) {
+        const q = db.players[n];
+        return '<div class="r' + (n === db.current ? ' me' : '') + '"><i>' + (i + 1) + '.</i>' +
+          esc(n) + '<em>' + q.w + 'W &middot; ' + q.d + 'R &middot; ' + q.l + 'V</em></div>';
+      }).join('');
+  }
+
+  function esc(t) { return String(t).replace(/[<>&]/g, function (c) {
+    return { '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]; }); }
+
+  function showLogin() {
+    const names = Object.keys(db.players).filter(function (n) { return n; });
+    knownEl.innerHTML = names.length
+      ? 'Eerder gespeeld: ' + names.map(function (n) { return '<span>' + esc(n) + '</span>'; }).join('')
+      : '';
+    knownEl.querySelectorAll('span').forEach(function (el) {
+      el.addEventListener('click', function () { startAs(el.textContent); });
+    });
+    loginName.value = '';
+    loginEl.classList.add('on');
+    setTimeout(function () { loginName.focus(); }, 30);
+  }
+
+  function startAs(name) {
+    db.current = name.slice(0, 24);
+    player();
+    saveDB();
+    playerNameEl.textContent = db.current;
+    loginEl.classList.remove('on');
+    renderScores();
+    newGame();
+    robinSay('Leuk je te zien, <b>' + esc(db.current) + '</b>! Succes \u2014 vraag gerust een hint.');
+  }
+
+  loginForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const n = loginName.value.trim();
+    if (n) startAs(n);
+  });
+  document.getElementById('btnSwitch').addEventListener('click', showLogin);
+
   const chatEl = document.getElementById('chat');
   const chatForm = document.getElementById('chatForm');
   const chatInput = document.getElementById('chatInput');
@@ -1295,7 +1479,16 @@ if (typeof document !== 'undefined') (function () {
   styleSel.addEventListener('change', renderStrength);
   overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.classList.remove('on'); });
 
-  newGame();
+  loadDB();
+  if (db.current && db.players[db.current]) {
+    playerNameEl.textContent = db.current;
+    renderScores();
+    newGame();
+  } else {
+    renderScores();
+    newGame();
+    showLogin();
+  }
 })();
 </script>
 </body>
