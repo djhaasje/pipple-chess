@@ -126,6 +126,10 @@
   .strength b{display:block;font-size:12.5px;margin-bottom:2px}
   .strength .bar{height:6px;border-radius:3px;background:var(--lilac2);margin-top:7px}
   .strength .bar i{display:block;height:6px;border-radius:3px;background:var(--magenta)}
+  .strength .bar.style{background:linear-gradient(90deg,#21A179,#E4646E)}
+  .strength .bar.style i{background:none;border-right:3px solid var(--purple);border-radius:0}
+  .strength .ends{display:flex;justify-content:space-between;font-size:10.5px;
+    color:#8E82A0;margin-top:3px}
   .evalbar{
     height:16px;border-radius:8px;background:var(--purple);overflow:hidden;
     border:1px solid var(--lilac2);
@@ -143,6 +147,32 @@
   #moves tr:nth-child(odd){background:var(--lilac)}
   #moves td.mv{font-weight:600;color:var(--purple)}
   #moves .empty{color:#9A8FA6;font-style:italic;padding:6px}
+
+  /* ---------------- Robin-chat ---------------- */
+  .robin-head{display:flex;align-items:center;gap:11px;margin-bottom:12px}
+  .robin-head img{width:46px;height:46px;border-radius:50%;object-fit:cover;
+    object-position:28% 22%;border:2px solid var(--purple)}
+  .robin-head b{display:block;font-size:14px;color:var(--purple)}
+  .robin-head span{font-size:11.5px;color:#21A179}
+  .robin-head span::before{content:'\25CF';margin-right:4px}
+  .chat{height:210px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;
+    padding:4px 2px;font-size:12.5px;line-height:1.45}
+  .bubble{max-width:88%;padding:8px 11px;border-radius:12px}
+  .bubble.r{background:var(--lilac);color:var(--ink);border-bottom-left-radius:3px;
+    align-self:flex-start}
+  .bubble.u{background:var(--purple);color:#fff;border-bottom-right-radius:3px;
+    align-self:flex-end}
+  .bubble.r b{color:var(--purple)}
+  .bubble.typing{color:#9A8FA6;font-style:italic}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 8px}
+  .chip{flex:0 0 auto;background:var(--lilac);color:var(--purple);border:1px solid var(--lilac2);
+    border-radius:14px;padding:5px 11px;font-size:11.5px;font-weight:600;cursor:pointer}
+  .chip:hover{background:var(--lilac2)}
+  .chatform{display:flex;gap:6px}
+  .chatform input{flex:1 1 auto;min-width:0;border:1px solid var(--lilac2);border-radius:4px;
+    padding:9px 10px;font-size:13px;font-family:inherit;color:var(--ink)}
+  .chatform input:focus{outline:2px solid var(--magenta);outline-offset:-1px}
+  .chatform button{flex:0 0 auto;padding:9px 14px}
 
   /* ---------------- promotie ---------------- */
   #overlay{
@@ -230,7 +260,16 @@
         <select id="level">
           <option value="1">Beginner</option>
           <option value="2" selected>Gemiddeld</option>
-          <option value="3">Pittig</option>
+          <option value="3">Robin</option>
+        </select>
+      </label>
+      <label class="row" id="rowStyle">Speelstijl
+        <select id="style">
+          <option value="-1">Zeer defensief</option>
+          <option value="-0.5">Defensief</option>
+          <option value="0" selected>Neutraal</option>
+          <option value="0.5">Aanvallend</option>
+          <option value="1">Zeer aanvallend</option>
         </select>
       </label>
       <div class="btns">
@@ -240,6 +279,25 @@
         <button id="btnFlip" class="ghost">Draai bord</button>
       </div>
       <div class="strength" id="strength"></div>
+    </div>
+
+    <div class="card">
+      <h2>Robin &mdash; je schaakcoach</h2>
+      <div class="robin-head">
+        <img src="Robin.jpg" alt="Robin">
+        <div><b>Robin</b><span>kijkt met je mee</span></div>
+      </div>
+      <div class="chat" id="chat"></div>
+      <div class="chips">
+        <button class="chip" data-q="hint">Geef een hint</button>
+        <button class="chip" data-q="hoe sta ik ervoor">Hoe sta ik ervoor?</button>
+        <button class="chip" data-q="wat dreigt er">Wat dreigt er?</button>
+        <button class="chip" data-q="leg de laatste zet uit">Laatste zet?</button>
+      </div>
+      <form class="chatform" id="chatForm" autocomplete="off">
+        <input id="chatInput" placeholder="Vraag Robin iets…">
+        <button type="submit">Stuur</button>
+      </form>
     </div>
 
     <div class="card">
@@ -569,6 +627,15 @@
       20, 30, 10, 0, 0, 10, 30, 20]
   };
 
+  /* Speelstijl: -1 = maximaal defensief, 0 = neutraal, +1 = maximaal offensief.
+     Offensief waardeert stukken die dicht bij de vijandelijke koning staan;
+     defensief waardeert stukken die de eigen koning dekken. */
+  let STYLE = 0;
+  function setStyle(v) { STYLE = Math.max(-1, Math.min(1, v || 0)); }
+  function getStyle() { return STYLE; }
+
+  const STYLE_W = { p: 1, n: 2, b: 2, r: 3, q: 5, k: 0 };
+
   function evaluate(state) {
     let score = 0;
     const b = state.board;
@@ -578,6 +645,37 @@
       const sign = p[0] === WHITE ? 1 : -1;
       const idx = p[0] === WHITE ? i : (56 - 8 * rankOf(i) + fileOf(i));
       score += sign * (VALUE[p[1]] + PST[p[1]][idx]);
+    }
+
+    if (STYLE !== 0) {
+      const wk = kingSquare(b, WHITE), bk = kingSquare(b, BLACK);
+      let aggrW = 0, aggrB = 0, safeW = 0, safeB = 0;
+      if (wk >= 0 && bk >= 0) {
+        const wkf = fileOf(wk), wkr = rankOf(wk), bkf = fileOf(bk), bkr = rankOf(bk);
+        for (let i = 0; i < 64; i++) {
+          const p = b[i];
+          if (!p || p[1] === 'k') continue;
+          const f = fileOf(i), r = rankOf(i), w = STYLE_W[p[1]];
+          if (p[0] === WHITE) {
+            const dk = Math.max(Math.abs(f - bkf), Math.abs(r - bkr));
+            if (dk <= 4) aggrW += (5 - dk) * w * 2;
+            if (r <= 3) aggrW += w;                                   // in de vijandelijke helft
+            if (Math.max(Math.abs(f - wkf), Math.abs(r - wkr)) <= 2) safeW += w * 4;
+            if (p[1] === 'p' && Math.abs(f - wkf) <= 1 && wkr - r === 1) safeW += 8;
+          } else {
+            const dk = Math.max(Math.abs(f - wkf), Math.abs(r - wkr));
+            if (dk <= 4) aggrB += (5 - dk) * w * 2;
+            if (r >= 4) aggrB += w;
+            if (Math.max(Math.abs(f - bkf), Math.abs(r - bkr)) <= 2) safeB += w * 4;
+            if (p[1] === 'p' && Math.abs(f - bkf) <= 1 && r - bkr === 1) safeB += 8;
+          }
+        }
+      }
+      const a = Math.max(0, STYLE), d = Math.max(0, -STYLE);
+      score += a * 2.2 * (aggrW - aggrB) + d * 2.2 * (safeW - safeB);
+      if (a > 0 && inCheck(state, state.turn)) {
+        score += (state.turn === WHITE ? -1 : 1) * a * 35;   // schaak geven loont
+      }
     }
     return state.turn === WHITE ? score : -score;
   }
@@ -656,7 +754,8 @@
     initialState: initialState, cloneState: cloneState, legalMoves: legalMoves,
     makeMove: makeMove, gameStatus: gameStatus, inCheck: inCheck, toSAN: toSAN,
     bestMove: bestMove, perft: perft, name: name, fileOf: fileOf, rankOf: rankOf,
-    sqIdx: sqIdx, evaluate: evaluate, evalScore: evalScore
+    sqIdx: sqIdx, evaluate: evaluate, evalScore: evalScore,
+    setStyle: setStyle, getStyle: getStyle, isAttacked: isAttacked
   };
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -685,6 +784,8 @@ if (typeof document !== 'undefined') (function () {
   const levelSel = document.getElementById('level');
   const rowSide = document.getElementById('rowSide');
   const rowLevel = document.getElementById('rowLevel');
+  const styleSel = document.getElementById('style');
+  const rowStyle = document.getElementById('rowStyle');
   const btnUndo = document.getElementById('btnUndo');
   const btnHint = document.getElementById('btnHint');
   const strengthEl = document.getElementById('strength');
@@ -743,25 +844,46 @@ if (typeof document !== 'undefined') (function () {
          desc: 'Kijkt 2 halve zetten vooruit. Ziet directe slagen, mist combinaties.' },
     2: { label: 'Gemiddeld', depth: 3, elo: '± 1200 Elo', bar: 55,
          desc: 'Kijkt 3 halve zetten vooruit plus alle slagreeksen. Straft blunders af.' },
-    3: { label: 'Pittig', depth: 4, elo: '± 1600 Elo', bar: 85,
+    3: { label: 'Robin', depth: 4, elo: '± 1600 Elo', bar: 85,
          desc: 'Kijkt 4 halve zetten vooruit. Vindt tactiek van twee zetten diep.' }
+  };
+
+  /* Speelstijl: bepaalt hoe de computer zijn stelling waardeert. */
+  const STYLES = {
+    '-1': { label: 'Zeer defensief',
+      desc: 'Houdt stukken rond de eigen koning, vermijdt risico en wacht op fouten.' },
+    '-0.5': { label: 'Defensief',
+      desc: 'Speelt solide, dekt de koning en ruilt graag af bij druk.' },
+    '0': { label: 'Neutraal',
+      desc: 'Puur materiaal en stelling; geen voorkeur voor aanval of verdediging.' },
+    '0.5': { label: 'Aanvallend',
+      desc: 'Zoekt actief stukken op richting jouw koning en accepteert wat risico.' },
+    '1': { label: 'Zeer aanvallend',
+      desc: 'Gaat vol op jouw koning af, offert eerder materiaal voor initiatief.' }
   };
 
   let state, history, sanList, captures, selected, legal, flipped, lastMove, over, thinking, hint;
 
   function levelInfo() { return LEVELS[levelSel.value] || LEVELS[2]; }
+  function styleInfo() { return STYLES[styleSel.value] || STYLES['0']; }
+  function styleValue() { return parseFloat(styleSel.value) || 0; }
 
   function renderStrength() {
     const L = levelInfo();
     if (modeSel.value !== 'ai') {
       strengthEl.innerHTML = '<b>Twee spelers</b>De computer speelt niet mee. ' +
-        'De hintknop rekent op niveau <b style="display:inline">Pittig</b> (diepte 4).';
+        'Robin en de hintknop rekenen altijd op niveau <b style="display:inline">Robin</b> (diepte 4).';
       return;
     }
+    const S = styleInfo();
+    const pct = 50 + styleValue() * 50;
     strengthEl.innerHTML =
       '<b>Speelsterkte computer: ' + L.label + '</b>' +
       'Zoekdiepte ' + L.depth + ' &middot; ' + L.elo + '<br>' + L.desc +
-      '<div class="bar"><i style="width:' + L.bar + '%"></i></div>';
+      '<div class="bar"><i style="width:' + L.bar + '%"></i></div>' +
+      '<b style="margin-top:10px">Speelstijl: ' + S.label + '</b>' + S.desc +
+      '<div class="bar style"><i style="width:' + pct + '%"></i></div>' +
+      '<div class="ends"><span>defensief</span><span>offensief</span></div>';
   }
 
   function newGame() {
@@ -776,6 +898,10 @@ if (typeof document !== 'undefined') (function () {
     thinking = false;
     hint = null;
     flipped = (modeSel.value === 'ai' && sideSel.value === 'b');
+    lastWarned = '';
+    chatEl.innerHTML = '';
+    robinSay('Nieuwe partij! Ik ben Robin. Vraag me gerust om een <b>hint</b>, ' +
+      'of stel een vraag over de stelling of de regels.');
     render();
     maybeAI();
   }
@@ -915,6 +1041,7 @@ if (typeof document !== 'undefined') (function () {
     legal = E.legalMoves(state);
     render();
     maybeAI();
+    if (!thinking) robinWatch();
   }
 
   function undo() {
@@ -934,22 +1061,7 @@ if (typeof document !== 'undefined') (function () {
   }
 
   /* Hint: zoekt de sterkste zet voor de speler die aan zet is. */
-  function showHint() {
-    if (over || thinking || !humanTurn() || !legal.length) return;
-    thinking = true;
-    hint = null;
-    noteEl.textContent = 'Hint wordt berekend\u2026';
-    btnHint.disabled = true;
-    setTimeout(function () {
-      const m = E.bestMove(state, 4);
-      thinking = false;
-      if (m) hint = { from: m.from, to: m.to, san: E.toSAN(state, m, legal) };
-      selected = null;
-      render();
-    }, 40);
-  }
-
-  /* Geslagen stukken = verschil tussen beginstelling en huidige stelling. */
+    /* Geslagen stukken = verschil tussen beginstelling en huidige stelling. */
   function rebuildCaptures() {
     const count = function (b) {
       const m = {};
@@ -973,25 +1085,227 @@ if (typeof document !== 'undefined') (function () {
     btnUndo.disabled = true;
     setTimeout(function () {
       const depth = levelInfo().depth;
+      E.setStyle(styleValue());
       const m = E.bestMove(state, depth);
+      E.setStyle(0);
       thinking = false;
       if (m) play(m); else render();
     }, 60);
   }
 
+
+  /* =====================================================================
+     Robin: schaakcoach in de chat. Gebruikt dezelfde engine als de
+     computer, maar rekent altijd neutraal (zonder speelstijl-bias).
+     ===================================================================== */
+  const chatEl = document.getElementById('chat');
+  const chatForm = document.getElementById('chatForm');
+  const chatInput = document.getElementById('chatInput');
+  const PIECE_NL = { p: 'pion', n: 'paard', b: 'loper', r: 'toren', q: 'dame', k: 'koning' };
+  const PIECE_DE = { p: 'de pion', n: 'het paard', b: 'de loper', r: 'de toren', q: 'de dame', k: 'de koning' };
+  let lastWarned = '';
+
+  function bubble(text, who) {
+    const d = document.createElement('div');
+    d.className = 'bubble ' + who;
+    d.innerHTML = text;
+    chatEl.appendChild(d);
+    chatEl.scrollTop = chatEl.scrollHeight;
+    return d;
+  }
+
+  function robinSay(text) {
+    const t = bubble('Robin typt\u2026', 'r typing');
+    setTimeout(function () {
+      t.className = 'bubble r';
+      t.innerHTML = text;
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }, 320);
+  }
+
+  /* Stukken van de speler aan zet die aangevallen worden. */
+  function threatened(color) {
+    const b = state.board, opp = color === 'w' ? 'b' : 'w', out = [];
+    for (let i = 0; i < 64; i++) {
+      const p = b[i];
+      if (!p || p[0] !== color || p[1] === 'k') continue;
+      if (!E.isAttacked(b, i, opp)) continue;
+      const defended = E.isAttacked(b, i, color);
+      out.push({ sq: i, piece: p, defended: defended, val: PIECE_VAL[p[1]] });
+    }
+    return out.sort(function (a, z) { return z.val - a.val; });
+  }
+
+  function moveReason(st, m) {
+    const b = st.board, reasons = [];
+    const after = E.makeMove(st, m);
+    const status = E.gameStatus(after);
+    if (status === 'checkmate') return 'dit is <b>schaakmat</b> \u2014 de partij is direct uit';
+    if (b[m.to]) reasons.push('je wint ' + PIECE_DE[b[m.to][1]] + ' op ' + E.name(m.to));
+    else if (m.ep) reasons.push('je slaat en-passant');
+    if (m.promo) reasons.push('je pion promoveert tot ' + PIECE_NL[m.promo]);
+    if (m.castle) reasons.push('je koning komt veilig weg en je toren wordt actief');
+    if (status === 'check') reasons.push('je zet de koning schaak');
+    const backRank = st.turn === 'w' ? 7 : 0;
+    const type = b[m.from][1];
+    if (!reasons.length && (type === 'n' || type === 'b') && E.rankOf(m.from) === backRank) {
+      reasons.push('je ontwikkelt een stuk naar het centrum');
+    }
+    if (!reasons.length) {
+      const before = E.evalScore(st, 2), aft = E.evalScore(after, 2);
+      const gain = (st.turn === 'w' ? aft - before : before - aft) / 100;
+      reasons.push(gain > 0.5 ? 'je verbetert je stelling flink'
+        : gain < -0.2 ? 'het is de minst slechte optie' : 'het is de meest solide zet');
+    }
+    return reasons.join(' en ');
+  }
+
+  function askHint() {
+    if (over) return robinSay('De partij is al afgelopen. Klik op <b>Nieuw spel</b> voor een revanche.');
+    if (!humanTurn()) return robinSay('Even geduld, de computer is aan zet.');
+    if (thinking) return robinSay('Momentje, ik ben al aan het rekenen\u2026');
+    robinSay('Ik denk even na\u2026');
+    thinking = true;
+    hint = null;
+    noteEl.textContent = 'Robin denkt na\u2026';
+    btnHint.disabled = true;
+    setTimeout(function () {
+      E.setStyle(0);
+      const m = E.bestMove(state, 4);
+      thinking = false;
+      if (!m) { render(); return robinSay('Er is geen zet meer mogelijk.'); }
+      const san = E.toSAN(state, m, legal);
+      hint = { from: m.from, to: m.to, san: san };
+      selected = null;
+      render();
+      robinSay('Speel <b>' + san + '</b> (' + E.name(m.from) + '\u2192' + E.name(m.to) + '): ' +
+        moveReason(state, m) + '. Ik heb het veld groen gemarkeerd.');
+    }, 60);
+  }
+
+  function askStand() {
+    const sc = E.evalScore(state, 2) / 100;
+    const md = materialDiff();
+    let t;
+    if (Math.abs(sc) < 0.3) t = 'De stelling is <b>in evenwicht</b>';
+    else t = '<b>' + (sc > 0 ? 'Wit' : 'Paars') + '</b> staat ' +
+      (Math.abs(sc) < 0.9 ? 'iets' : Math.abs(sc) < 2.5 ? 'duidelijk' : 'gewonnen') +
+      ' beter (' + (sc > 0 ? '+' : '') + sc.toFixed(1) + ')';
+    t += md === 0 ? ', materiaal is gelijk.'
+      : ', ' + (md > 0 ? 'wit' : 'paars') + ' heeft ' + Math.abs(md) + ' punt' +
+        (Math.abs(md) === 1 ? '' : 'en') + ' materiaal meer.';
+    robinSay(t);
+  }
+
+  function askThreats() {
+    const me = state.turn;
+    if (E.inCheck(state, me)) {
+      return robinSay('Je staat <b>schaak</b>! Je moet het schaak opheffen: koning wegzetten, ' +
+        'het aanvallende stuk slaan of een stuk ertussen zetten.');
+    }
+    const list = threatened(me).filter(function (x) { return !x.defended || x.val >= 5; });
+    if (!list.length) return robinSay('Niets staat direct in gevaar. Goed moment om je stelling te verbeteren \u2014 vraag gerust een hint.');
+    const parts = list.slice(0, 3).map(function (x) {
+      return '<b>' + PIECE_NL[x.piece[1]] + ' op ' + E.name(x.sq) + '</b>' +
+        (x.defended ? ' (wel gedekt)' : ' (<u>ongedekt</u>)');
+    });
+    robinSay('Let op: ' + parts.join(', ') + ' word' + (list.length > 1 ? 'en' : 't') + ' aangevallen.');
+  }
+
+  function askLastMove() {
+    if (!sanList.length) return robinSay('Er is nog geen zet gespeeld. Wit begint \u2014 zal ik een opening aanraden?');
+    const san = sanList[sanList.length - 1];
+    const byWhite = sanList.length % 2 === 1;
+    let t = 'De laatste zet was <b>' + san + '</b> van ' + (byWhite ? 'wit' : 'paars') + '. ';
+    if (san.indexOf('#') >= 0) t += 'Dat is schaakmat.';
+    else if (san.indexOf('+') >= 0) t += 'Dat geeft schaak, dus je moet daar eerst iets aan doen.';
+    else if (san.indexOf('x') >= 0) t += 'Er werd een stuk geslagen \u2014 kijk of je terug kunt slaan.';
+    else if (san.indexOf('O-O') === 0) t += 'De koning is in veiligheid gebracht met een rokade.';
+    else t += 'Een rustige zet; kijk welk veld daardoor extra gedekt of juist zwak is.';
+    const list = threatened(state.turn).filter(function (x) { return !x.defended; });
+    if (list.length) t += ' Het levert wel een aanval op je ' + PIECE_NL[list[0].piece[1]] +
+      ' op ' + E.name(list[0].sq) + ' op.';
+    robinSay(t);
+  }
+
+  const RULES = [
+    [['rokade', 'rokeer', 'rokeren'], 'Rokeren mag als koning en toren nog niet gezet hebben, de velden ertussen leeg zijn, en de koning niet schaak staat, niet door een aangevallen veld gaat en er niet op eindigt. Klik de koning aan en daarna het veld twee stappen opzij.'],
+    [['en passant', 'passant'], 'En-passant: gaat een vijandelijke pion vanaf zijn beginveld twee velden vooruit en komt hij naast jouw pion, dan mag je hem direct daarna schuin slaan alsof hij maar \u00e9\u00e9n veld had gedaan. Alleen die ene zet lang.'],
+    [['promo', 'promoveer', 'dame worden'], 'Bereikt je pion de overkant, dan promoveert hij. Je krijgt een keuzescherm: dame, toren, loper of paard. In bijna alle gevallen kies je de dame.'],
+    [['pat', 'remise', 'gelijkspel'], 'Pat is remise: de speler die aan zet is staat niet schaak maar heeft geen enkele legale zet. Ook remise: 50 zetten zonder slag of pionzet, en onvoldoende materiaal.'],
+    [['schaakmat', 'mat '], 'Schaakmat: de koning staat schaak en er is geen manier om dat op te heffen. De partij is dan direct afgelopen.'],
+    [['waarde', 'punten', 'hoeveel is'], 'Richtwaarden: pion 1, paard 3, loper 3, toren 5, dame 9. De koning is onbetaalbaar. Ruil dus geen toren tegen een loper zonder goede reden.'],
+    [['koning slaan', 'koning pakken'], 'De koning wordt nooit geslagen. Je zet hem schaak; kan de tegenstander dat niet opheffen, dan is het schaakmat.'],
+    [['opening', 'begin', 'eerste zet'], 'Vuistregels voor de opening: zet een centrumpion vooruit (e4 of d4), ontwikkel je paarden en lopers, rokeer vroeg en verplaats hetzelfde stuk niet twee keer. Je dame komt pas laat.'],
+    [['pen', 'gepend', 'penning'], 'Een penning: je stuk mag niet weg omdat er een waardevoller stuk (vaak de koning) achter staat. Bij een penning tegen de koning is wegzetten zelfs illegaal.'],
+    [['stijl', 'aanvallend', 'defensief'], 'Bij Instellingen kies je de speelstijl van de computer: van zeer defensief (blijft bij zijn koning) tot zeer aanvallend (stuurt alles op jouw koning af). Mijn adviezen blijven altijd neutraal en objectief.'],
+    [['niveau', 'moeilijk', 'sterker', 'zwakker', 'elo'], 'Er zijn drie niveaus: Beginner (diepte 2, ca. 800 Elo), Gemiddeld (diepte 3, ca. 1200) en Robin (diepte 4, ca. 1600). Ik reken zelf altijd op diepte 4.']
+  ];
+
+  function answer(q) {
+    const t = q.toLowerCase();
+    const has = function (arr) { return arr.some(function (k) { return t.indexOf(k) >= 0; }); };
+
+    if (has(['hallo', 'hoi', 'hey', 'goedemiddag', 'goedemorgen'])) {
+      return robinSay('Hoi! Ik kijk met je mee. Vraag me om een <b>hint</b>, of vraag hoe je ervoor staat.');
+    }
+    if (has(['dank', 'bedankt', 'thanks', 'top'])) {
+      return robinSay('Graag gedaan \u2014 speel rustig door, ik let mee op.');
+    }
+    if (has(['hint', 'beste zet', 'wat moet ik', 'welke zet', 'help', 'advies', 'tip'])) return askHint();
+    if (has(['sta ik', 'staan we', 'stand', 'wie wint', 'wie staat', 'score', 'ervoor'])) return askStand();
+    if (has(['dreig', 'gevaar', 'aangevallen', 'pas op', 'veilig', 'hangt'])) return askThreats();
+    if (has(['laatste zet', 'vorige zet', 'waarom', 'wat deed', 'leg uit', 'uitleg'])) return askLastMove();
+
+    for (const r of RULES) if (has(r[0])) return robinSay(r[1]);
+
+    robinSay('Dat weet ik niet zeker. Ik kan je wel helpen met: een <b>hint</b>, ' +
+      '<b>hoe je ervoor staat</b>, <b>wat er dreigt</b>, de <b>laatste zet</b> uitleggen ' +
+      'of regels zoals rokade, en-passant en promotie.');
+  }
+
+  /* Waarschuwt automatisch als de speler een stuk ongedekt laat staan. */
+  function robinWatch() {
+    if (over || !humanTurn()) return;
+    const list = threatened(state.turn).filter(function (x) { return !x.defended && x.val >= 3; });
+    if (!list.length) { lastWarned = ''; return; }
+    const key = list.map(function (x) { return x.sq; }).join(',');
+    if (key === lastWarned) return;
+    lastWarned = key;
+    robinSay('\u26a0\ufe0f Je ' + PIECE_NL[list[0].piece[1]] + ' op <b>' + E.name(list[0].sq) +
+      '</b> staat ongedekt aangevallen. Slaan, dekken of wegzetten?');
+  }
+
+  chatForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const q = chatInput.value.trim();
+    if (!q) return;
+    bubble(q.replace(/</g, '&lt;'), 'u');
+    chatInput.value = '';
+    setTimeout(function () { answer(q); }, 120);
+  });
+  document.querySelectorAll('.chip').forEach(function (c) {
+    c.addEventListener('click', function () {
+      bubble(c.textContent, 'u');
+      setTimeout(function () { answer(c.dataset.q); }, 120);
+    });
+  });
+
   function syncControls() {
     const ai = modeSel.value === 'ai';
     rowSide.style.display = ai ? 'flex' : 'none';
     rowLevel.style.display = ai ? 'flex' : 'none';
+    rowStyle.style.display = ai ? 'flex' : 'none';
   }
 
   document.getElementById('btnNew').addEventListener('click', newGame);
   btnUndo.addEventListener('click', undo);
-  btnHint.addEventListener('click', showHint);
+  btnHint.addEventListener('click', askHint);
   document.getElementById('btnFlip').addEventListener('click', function () { flipped = !flipped; render(); });
   modeSel.addEventListener('change', function () { syncControls(); newGame(); });
   sideSel.addEventListener('change', newGame);
   levelSel.addEventListener('change', renderStrength);
+  styleSel.addEventListener('change', renderStrength);
   overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.classList.remove('on'); });
 
   syncControls();
