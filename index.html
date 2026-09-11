@@ -244,12 +244,6 @@
 
     <div class="card">
       <h2>Instellingen</h2>
-      <label class="row">Tegenstander
-        <select id="mode">
-          <option value="human">Twee spelers</option>
-          <option value="ai">Computer</option>
-        </select>
-      </label>
       <label class="row" id="rowSide">Jij speelt
         <select id="side">
           <option value="w">Wit</option>
@@ -779,13 +773,9 @@ if (typeof document !== 'undefined') (function () {
   const capBEl = document.getElementById('capB');
   const overlay = document.getElementById('overlay');
   const promoOpts = document.getElementById('promoOpts');
-  const modeSel = document.getElementById('mode');
   const sideSel = document.getElementById('side');
   const levelSel = document.getElementById('level');
-  const rowSide = document.getElementById('rowSide');
-  const rowLevel = document.getElementById('rowLevel');
   const styleSel = document.getElementById('style');
-  const rowStyle = document.getElementById('rowStyle');
   const btnUndo = document.getElementById('btnUndo');
   const btnHint = document.getElementById('btnHint');
   const strengthEl = document.getElementById('strength');
@@ -870,11 +860,6 @@ if (typeof document !== 'undefined') (function () {
 
   function renderStrength() {
     const L = levelInfo();
-    if (modeSel.value !== 'ai') {
-      strengthEl.innerHTML = '<b>Twee spelers</b>De computer speelt niet mee. ' +
-        'Robin en de hintknop rekenen altijd op niveau <b style="display:inline">Robin</b> (diepte 4).';
-      return;
-    }
     const S = styleInfo();
     const pct = 50 + styleValue() * 50;
     strengthEl.innerHTML =
@@ -897,7 +882,7 @@ if (typeof document !== 'undefined') (function () {
     over = false;
     thinking = false;
     hint = null;
-    flipped = (modeSel.value === 'ai' && sideSel.value === 'b');
+    flipped = (sideSel.value === 'b');
     lastWarned = '';
     chatEl.innerHTML = '';
     robinSay('Nieuwe partij! Ik ben Robin. Vraag me gerust om een <b>hint</b>, ' +
@@ -999,7 +984,7 @@ if (typeof document !== 'undefined') (function () {
   }
 
   function humanTurn() {
-    return modeSel.value === 'human' || state.turn === sideSel.value;
+    return state.turn === sideSel.value;
   }
 
   function onClick(i) {
@@ -1046,7 +1031,7 @@ if (typeof document !== 'undefined') (function () {
 
   function undo() {
     if (!history.length || thinking) return;
-    const steps = (modeSel.value === 'ai' && history.length > 1) ? 2 : 1;
+    const steps = history.length > 1 ? 2 : 1;
     for (let n = 0; n < steps && history.length; n++) {
       const h = history.pop();
       state = h.state;
@@ -1077,7 +1062,7 @@ if (typeof document !== 'undefined') (function () {
   }
 
   function maybeAI() {
-    if (over || modeSel.value !== 'ai') return;
+    if (over) return;
     if (state.turn === sideSel.value) return;
     if (!legal.length) return;
     thinking = true;
@@ -1291,24 +1276,15 @@ if (typeof document !== 'undefined') (function () {
     });
   });
 
-  function syncControls() {
-    const ai = modeSel.value === 'ai';
-    rowSide.style.display = ai ? 'flex' : 'none';
-    rowLevel.style.display = ai ? 'flex' : 'none';
-    rowStyle.style.display = ai ? 'flex' : 'none';
-  }
-
   document.getElementById('btnNew').addEventListener('click', newGame);
   btnUndo.addEventListener('click', undo);
   btnHint.addEventListener('click', askHint);
   document.getElementById('btnFlip').addEventListener('click', function () { flipped = !flipped; render(); });
-  modeSel.addEventListener('change', function () { syncControls(); newGame(); });
   sideSel.addEventListener('change', newGame);
   levelSel.addEventListener('change', renderStrength);
   styleSel.addEventListener('change', renderStrength);
   overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.classList.remove('on'); });
 
-  syncControls();
   newGame();
 })();
 </script>
