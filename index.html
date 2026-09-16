@@ -331,6 +331,7 @@
       <div class="btns">
         <button id="btnNew">Nieuw spel</button>
         <button id="btnHint" class="hint-btn">Hint</button>
+        <button id="btnUndo" class="ghost">Zet terug</button>
         <button id="btnFlip" class="ghost">Draai bord</button>
       </div>
       <div class="strength" id="strength"></div>
@@ -853,6 +854,7 @@ if (typeof document !== 'undefined') (function () {
   const sideSel = document.getElementById('side');
   const levelSel = document.getElementById('level');
   const styleSel = document.getElementById('style');
+  const btnUndo = document.getElementById('btnUndo');
   const btnHint = document.getElementById('btnHint');
   const strengthEl = document.getElementById('strength');
   const evalFill = document.getElementById('evalFill');
@@ -1020,6 +1022,7 @@ if (typeof document !== 'undefined') (function () {
     renderStatus();
     renderStrength();
     renderEval();
+    btnUndo.disabled = history.length === 0 || thinking;
     btnHint.disabled = over || thinking || !humanTurn();
   }
 
@@ -1114,6 +1117,22 @@ if (typeof document !== 'undefined') (function () {
     if (!thinking) robinWatch();
   }
 
+  function undo() {
+    if (!history.length || thinking) return;
+    const steps = history.length > 1 ? 2 : 1;
+    for (let n = 0; n < steps && history.length; n++) {
+      const h = history.pop();
+      state = h.state;
+      lastMove = h.last;
+      sanList.pop();
+    }
+    rebuildCaptures();
+    selected = null;
+    hint = null;
+    legal = E.legalMoves(state);
+    render();
+  }
+
   /* Hint: zoekt de sterkste zet voor de speler die aan zet is. */
     /* Geslagen stukken = verschil tussen beginstelling en huidige stelling. */
   function rebuildCaptures() {
@@ -1136,6 +1155,7 @@ if (typeof document !== 'undefined') (function () {
     if (!legal.length) return;
     thinking = true;
     renderStatus();
+    btnUndo.disabled = true;
     setTimeout(function () {
       const depth = levelInfo().depth;
       E.setStyle(styleValue());
@@ -1451,6 +1471,7 @@ if (typeof document !== 'undefined') (function () {
   });
 
   document.getElementById('btnNew').addEventListener('click', newGame);
+  btnUndo.addEventListener('click', undo);
   btnHint.addEventListener('click', askHint);
   document.getElementById('btnFlip').addEventListener('click', function () { flipped = !flipped; render(); });
   sideSel.addEventListener('change', newGame);
